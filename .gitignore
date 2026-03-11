@@ -1,0 +1,35 @@
+# Build output
+firmware/build/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# STM32CubeIDE
+Debug/
+Release/
+.settings/
+.cproject
+.project
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db

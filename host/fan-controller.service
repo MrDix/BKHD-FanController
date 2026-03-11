@@ -1,0 +1,20 @@
+[Unit]
+Description=BKHD Fan Controller Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/bkhd-fanctrl/fan_controller.py -c /etc/fanctrl.yaml
+ExecStopPost=/bin/sleep 1
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fanctrl
+
+# Run as root for hwmon/serial access, or configure a dedicated user
+# with appropriate group memberships (dialout, etc.)
+User=root
+
+[Install]
+WantedBy=multi-user.target

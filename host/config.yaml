@@ -1,0 +1,58 @@
+# BKHD Fan Controller — Configuration
+# Copy to /etc/fanctrl.yaml and adjust as needed.
+
+serial_port: /dev/ttyS0
+baud_rate: 115200
+poll_interval: 5.0       # seconds between temperature reads
+keepalive_interval: 10.0  # seconds between keep-alive frames
+
+fans:
+  fan1:
+    label: "NVMe1"
+    sensor: "nvme0"           # hwmon name (ls /sys/class/hwmon/*/name)
+    fallback_sensor: "coretemp"
+    temp_min: 35              # below this: pwm_min
+    temp_max: 55              # above this: pwm_max (100%)
+    pwm_min: 30               # minimum duty cycle (%)
+    pwm_max: 100
+    hysteresis: 3             # degrees C
+
+  fan2:
+    label: "NVMe2"
+    sensor: "nvme1"
+    fallback_sensor: "coretemp"
+    temp_min: 35
+    temp_max: 55
+    pwm_min: 30
+    pwm_max: 100
+    hysteresis: 3
+
+  fan3:
+    label: "82599ES"
+    sensor: "ixgbe"
+    fallback_sensor: "coretemp"
+    temp_min: 40
+    temp_max: 70
+    pwm_min: 25
+    pwm_max: 100
+    hysteresis: 3
+
+  fan4:
+    label: "RAM"
+    sensor: null              # RAM temp usually not available
+    fallback_sensor: "coretemp"
+    temp_min: 35
+    temp_max: 60
+    pwm_min: 25
+    pwm_max: 100
+    hysteresis: 3
+
+  fan5:
+    label: "Motherboard"
+    sensor: "acpitz"
+    fallback_sensor: "coretemp"
+    temp_min: 35
+    temp_max: 60
+    pwm_min: 25
+    pwm_max: 100
+    hysteresis: 3
