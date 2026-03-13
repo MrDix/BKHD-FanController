@@ -60,7 +60,7 @@ brew install cmake
 <summary><strong>Windows</strong></summary>
 
 1. Download the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) — choose the `arm-none-eabi` AArch32 bare-metal target for Windows:
-   - **`.msi` installer** (recommended) — installs to `C:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\<version>\bin`. After installation, add this `bin` directory to your system PATH manually.
+   - **`.msi` installer** (recommended) — installs to `C:\Program Files (x86)\Arm\GNU Toolchain mingw-w64-i686-arm-none-eabi\bin`. After installation, add this `bin` directory to your system PATH manually.
    - **`.zip` portable** — extract anywhere and add the `bin` directory to your PATH.
 2. Install [CMake](https://cmake.org/download/) (`.msi` installer, check **"Add CMake to PATH"**).
 4. Install a build system — either:
