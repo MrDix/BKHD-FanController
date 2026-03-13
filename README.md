@@ -26,13 +26,54 @@ See [docs/hardware-notes.md](docs/hardware-notes.md) for schematics and pin mapp
 
 ### Prerequisites
 
-```bash
-# Ubuntu/Debian
-sudo apt install gcc-arm-none-eabi cmake make
+<details>
+<summary><strong>Linux (Ubuntu/Debian)</strong></summary>
 
-# Arch
+```bash
+sudo apt install gcc-arm-none-eabi cmake make
+```
+
+</details>
+
+<details>
+<summary><strong>Linux (Arch)</strong></summary>
+
+```bash
 sudo pacman -S arm-none-eabi-gcc arm-none-eabi-newlib cmake
 ```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+Install [Homebrew](https://brew.sh) if not already present, then:
+
+```bash
+brew install --cask gcc-arm-embedded
+brew install cmake
+```
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+1. Download and install the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (select the `arm-none-eabi` AArch32 bare-metal `.exe` installer).
+2. During installation, check **"Add path to environment variable"**.
+3. Install [CMake](https://cmake.org/download/) (`.msi` installer, check **"Add CMake to PATH"**).
+4. Install a build system — either:
+   - [Ninja](https://ninja-build.org/) (recommended, drop `ninja.exe` into a directory on your PATH), or
+   - `make` via [MSYS2](https://www.msys2.org/) (`pacman -S mingw-w64-x86_64-make`) or [chocolatey](https://chocolatey.org/) (`choco install make`).
+
+Verify after installation:
+
+```cmd
+arm-none-eabi-gcc --version
+cmake --version
+```
+
+</details>
 
 ### Clone and init submodules
 
@@ -50,24 +91,95 @@ cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
 cmake --build build
 ```
 
+On Windows with Ninja instead of Make:
+
+```cmd
+cd firmware
+cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+cmake --build build
+```
+
 Output: `build/fan_controller.bin` and `build/fan_controller.hex`
 
 ### Flash via SWD
 
-Using [stlink tools](https://github.com/stlink-org/stlink):
+#### Using an STLINK-V3MINIE
+
+The [STLINK-V3MINIE](https://www.st.com/en/development-tools/stlink-v3minie.html) connects to the MCU via the SWD header (SWDIO, SWCLK, GND, 3.3V).
+
+**Install flash tools:**
+
+<details>
+<summary><strong>Linux</strong></summary>
+
+```bash
+# stlink open-source tools
+sudo apt install stlink-tools        # Ubuntu/Debian
+sudo pacman -S stlink                # Arch
+
+# Or install STM32CubeProgrammer from:
+# https://www.st.com/en/development-tools/stm32cubeprog.html
+```
+
+udev rules (required for non-root access):
+
+```bash
+sudo cp /usr/lib/udev/rules.d/*stlink* /etc/udev/rules.d/ 2>/dev/null || \
+  sudo sh -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"0483\", ATTR{idProduct}==\"3754\", MODE=\"0666\"" > /etc/udev/rules.d/49-stlink.rules'
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+# stlink open-source tools
+brew install stlink
+
+# Or install STM32CubeProgrammer from:
+# https://www.st.com/en/development-tools/stm32cubeprog.html
+```
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+Install [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html). It includes `STM32_Programmer_CLI.exe` and the required USB drivers for the STLINK-V3MINIE.
+
+Default install path: `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin`
+
+Add this directory to your PATH, or use the full path in the commands below.
+
+</details>
+
+**Flash the firmware:**
+
+Using [stlink tools](https://github.com/stlink-org/stlink) (Linux / macOS):
 ```bash
 st-flash write build/fan_controller.bin 0x08000000
 ```
 
-Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html):
+Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) (Linux / macOS / Windows):
 ```bash
-STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000
+STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000 -v --start
 ```
 
-Using OpenOCD:
+Using OpenOCD (Linux / macOS):
 ```bash
 openocd -f interface/stlink.cfg -f target/stm32g0x.cfg \
     -c "program build/fan_controller.bin 0x08000000 verify reset exit"
+```
+
+**Verify the connection** (optional, any platform):
+```bash
+# stlink
+st-info --probe
+
+# STM32CubeProgrammer
+STM32_Programmer_CLI -c port=SWD --readDeviceId
 ```
 
 ## Host Software Setup
