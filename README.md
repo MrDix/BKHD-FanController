@@ -63,9 +63,9 @@ brew install cmake
    - **`.msi` installer** (recommended) — installs to `C:\Program Files (x86)\Arm\GNU Toolchain mingw-w64-i686-arm-none-eabi\bin`. After installation, add this `bin` directory to your system PATH manually.
    - **`.zip` portable** — extract anywhere and add the `bin` directory to your PATH.
 2. Install [CMake](https://cmake.org/download/) (`.msi` installer, check **"Add CMake to PATH"**).
-4. Install a build system — either:
+3. Install a build system — either:
    - [Ninja](https://ninja-build.org/) (recommended, drop `ninja.exe` into a directory on your PATH), or
-   - `make` via [MSYS2](https://www.msys2.org/) (`pacman -S mingw-w64-x86_64-make`) or [chocolatey](https://chocolatey.org/) (`choco install make`).
+   - `mingw32-make` via [MSYS2](https://www.msys2.org/) (`pacman -S mingw-w64-x86_64-make`) or [chocolatey](https://chocolatey.org/) (`choco install make`) — ensure `mingw32-make.exe` is on your PATH.
 
 Verify after installation:
 
@@ -187,9 +187,8 @@ st-flash write build/fan_controller.bin 0x08000000
 ```
 
 Using [OpenOCD](https://github.com/openocd-org/openocd/releases) (Linux / macOS / Windows):
-```bash
-openocd -f interface/stlink.cfg -f target/stm32g0x.cfg \
-    -c "program build/fan_controller.bin 0x08000000 verify reset exit"
+```
+openocd -f interface/stlink.cfg -f target/stm32g0x.cfg -c "program build/fan_controller.bin 0x08000000 verify reset exit"
 ```
 
 Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) (Linux / macOS / Windows):
@@ -203,7 +202,7 @@ STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000 -v --sta
 st-info --probe
 
 # OpenOCD (Linux / macOS / Windows)
-openocd -f interface/stlink.cfg -f target/stm32g0x.cfg
+openocd -f interface/stlink.cfg -f target/stm32g0x.cfg -c "init; shutdown"
 
 # STM32CubeProgrammer (Linux / macOS / Windows)
 STM32_Programmer_CLI -c port=SWD

@@ -12,7 +12,7 @@ if(NOT ARM_TOOLCHAIN_PATH)
     endif()
 endif()
 
-if(WIN32)
+if(CMAKE_HOST_WIN32)
     set(TOOLCHAIN_EXT ".exe")
 else()
     set(TOOLCHAIN_EXT "")
