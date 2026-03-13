@@ -127,6 +127,10 @@ udev rules (required for non-root access):
 sudo cp /usr/lib/udev/rules.d/*stlink* /etc/udev/rules.d/ 2>/dev/null || \
   sudo sh -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"0483\", ATTR{idProduct}==\"3754\", GROUP=\"plugdev\", MODE=\"0660\", TAG+=\"uaccess\"" > /etc/udev/rules.d/49-stlink.rules'
 sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# If the device is still not accessible, add your user to the plugdev group:
+# sudo usermod -a -G plugdev $USER
+# (log out and back in for group changes to take effect)
 ```
 
 </details>
