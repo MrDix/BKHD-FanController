@@ -12,11 +12,17 @@ if(NOT ARM_TOOLCHAIN_PATH)
     endif()
 endif()
 
-set(CMAKE_C_COMPILER   "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-gcc")
-set(CMAKE_ASM_COMPILER "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-gcc")
-set(CMAKE_OBJCOPY      "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-objcopy")
-set(CMAKE_OBJDUMP      "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-objdump")
-set(CMAKE_SIZE         "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-size")
+if(WIN32)
+    set(TOOLCHAIN_EXT ".exe")
+else()
+    set(TOOLCHAIN_EXT "")
+endif()
+
+set(CMAKE_C_COMPILER   "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-gcc${TOOLCHAIN_EXT}")
+set(CMAKE_ASM_COMPILER "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-gcc${TOOLCHAIN_EXT}")
+set(CMAKE_OBJCOPY      "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-objcopy${TOOLCHAIN_EXT}")
+set(CMAKE_OBJDUMP      "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-objdump${TOOLCHAIN_EXT}")
+set(CMAKE_SIZE         "${ARM_TOOLCHAIN_PATH}/arm-none-eabi-size${TOOLCHAIN_EXT}")
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 

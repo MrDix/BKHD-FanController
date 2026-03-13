@@ -26,13 +26,55 @@ See [docs/hardware-notes.md](docs/hardware-notes.md) for schematics and pin mapp
 
 ### Prerequisites
 
-```bash
-# Ubuntu/Debian
-sudo apt install gcc-arm-none-eabi cmake make
+<details>
+<summary><strong>Linux (Ubuntu/Debian)</strong></summary>
 
-# Arch
+```bash
+sudo apt install gcc-arm-none-eabi cmake make
+```
+
+</details>
+
+<details>
+<summary><strong>Linux (Arch)</strong></summary>
+
+```bash
 sudo pacman -S arm-none-eabi-gcc arm-none-eabi-newlib cmake
 ```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+Install [Homebrew](https://brew.sh) if not already present, then:
+
+```bash
+brew install --cask gcc-arm-embedded
+brew install cmake
+```
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+1. Download the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) — choose the `arm-none-eabi` AArch32 bare-metal target for Windows:
+   - **`.msi` installer** (recommended) — installs to `C:\Program Files (x86)\Arm\GNU Toolchain mingw-w64-i686-arm-none-eabi\bin`. After installation, add this `bin` directory to your system PATH manually.
+   - **`.zip` portable** — extract anywhere and add the `bin` directory to your PATH.
+2. Install [CMake](https://cmake.org/download/) (`.msi` installer, check **"Add CMake to PATH"**).
+4. Install a build system — either:
+   - [Ninja](https://ninja-build.org/) (recommended, drop `ninja.exe` into a directory on your PATH), or
+   - `make` via [MSYS2](https://www.msys2.org/) (`pacman -S mingw-w64-x86_64-make`) or [chocolatey](https://chocolatey.org/) (`choco install make`).
+
+Verify after installation:
+
+```cmd
+arm-none-eabi-gcc --version
+cmake --version
+```
+
+</details>
 
 ### Clone and init submodules
 
@@ -44,9 +86,23 @@ git submodule update --init --recursive
 
 ### Build
 
+Linux / macOS:
+
 ```bash
 cd firmware
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+cmake --build build
+```
+
+Windows (a generator must be specified — CMake defaults to NMake which requires Visual Studio):
+
+```cmd
+cd firmware
+rem With Ninja (recommended):
+cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+rem Or with MinGW Make (if installed via MSYS2/chocolatey):
+cmake -B build -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+
 cmake --build build
 ```
 
@@ -54,20 +110,103 @@ Output: `build/fan_controller.bin` and `build/fan_controller.hex`
 
 ### Flash via SWD
 
-Using [stlink tools](https://github.com/stlink-org/stlink):
+#### Using an STLINK-V3MINIE
+
+The [STLINK-V3MINIE](https://www.st.com/en/development-tools/stlink-v3minie.html) connects to the MCU via the SWD header (SWDIO, SWCLK, GND, 3.3V).
+
+> **Important:** The STLINK-V3MINIE does **not** supply power to the target board — it only measures the target voltage. Your board must be powered externally (e.g. via USB or a 5V supply) before flashing.
+
+![Flashing setup: Lab power supply (5V) connected to the PCB (right), STLINK-V3MINIE programmer connected via SWD header (left)](docs/20260313_052842.jpg)
+
+**Install flash tools:**
+
+<details>
+<summary><strong>Linux</strong></summary>
+
+```bash
+# Option 1: stlink open-source tools (recommended)
+sudo apt install stlink-tools        # Ubuntu/Debian
+sudo pacman -S stlink                # Arch
+
+# Option 2: OpenOCD
+sudo apt install openocd             # Ubuntu/Debian
+sudo pacman -S openocd               # Arch
+```
+
+udev rules (required for non-root access):
+
+```bash
+sudo cp /usr/lib/udev/rules.d/*stlink* /etc/udev/rules.d/ 2>/dev/null || \
+  sudo sh -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"0483\", ATTR{idProduct}==\"3754\", GROUP=\"plugdev\", MODE=\"0660\", TAG+=\"uaccess\"" > /etc/udev/rules.d/49-stlink.rules'
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# If the device is still not accessible, add your user to the plugdev group:
+# sudo usermod -a -G plugdev $USER
+# (log out and back in for group changes to take effect)
+```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+# Option 1: stlink open-source tools (recommended)
+brew install stlink
+
+# Option 2: OpenOCD
+brew install openocd
+```
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+> **Note:** The open-source stlink-tools (`st-flash`) do **not** support the STLINK-V3 on Windows. Use OpenOCD or STM32CubeProgrammer instead.
+
+**Option 1: OpenOCD (recommended)**
+
+Download from [openocd.org/releases](https://github.com/openocd-org/openocd/releases) and extract the archive. Add the `bin` directory to your PATH (the `scripts` folder must remain in the same relative location).
+
+**Option 2: STM32CubeProgrammer**
+
+Download from [st.com](https://www.st.com/en/development-tools/stm32cubeprog.html). The installer is Java-based — the setup wizard may open behind other windows, check the taskbar if it appears to hang.
+
+Default install path: `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin`
+
+Add this directory to your PATH.
+
+</details>
+
+**Flash the firmware:**
+
+Using [stlink tools](https://github.com/stlink-org/stlink) (Linux / macOS):
 ```bash
 st-flash write build/fan_controller.bin 0x08000000
 ```
 
-Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html):
-```bash
-STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000
-```
-
-Using OpenOCD:
+Using [OpenOCD](https://github.com/openocd-org/openocd/releases) (Linux / macOS / Windows):
 ```bash
 openocd -f interface/stlink.cfg -f target/stm32g0x.cfg \
     -c "program build/fan_controller.bin 0x08000000 verify reset exit"
+```
+
+Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) (Linux / macOS / Windows):
+```bash
+STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000 -v --start
+```
+
+**Verify the connection** (optional):
+```bash
+# stlink (Linux / macOS only)
+st-info --probe
+
+# OpenOCD (Linux / macOS / Windows)
+openocd -f interface/stlink.cfg -f target/stm32g0x.cfg
+
+# STM32CubeProgrammer (Linux / macOS / Windows)
+STM32_Programmer_CLI -c port=SWD
 ```
 
 ## Host Software Setup
