@@ -116,6 +116,8 @@ The [STLINK-V3MINIE](https://www.st.com/en/development-tools/stlink-v3minie.html
 
 > **Important:** The STLINK-V3MINIE does **not** supply power to the target board — it only measures the target voltage. Your board must be powered externally (e.g. via USB or a 5V supply) before flashing.
 
+![Flashing setup: Lab power supply (5V) connected to the PCB (right), STLINK-V3MINIE programmer connected via SWD header (left)](docs/20260313_052842.jpg)
+
 **Install flash tools:**
 
 <details>
