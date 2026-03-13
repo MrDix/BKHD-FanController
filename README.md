@@ -86,17 +86,23 @@ git submodule update --init --recursive
 
 ### Build
 
+Linux / macOS:
+
 ```bash
 cd firmware
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
 cmake --build build
 ```
 
-On Windows with Ninja instead of Make:
+Windows (a generator must be specified — CMake defaults to NMake which requires Visual Studio):
 
 ```cmd
 cd firmware
+rem With Ninja (recommended):
 cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+rem Or with MinGW Make (if installed via MSYS2/chocolatey):
+cmake -B build -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+
 cmake --build build
 ```
 
