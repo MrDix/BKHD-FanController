@@ -13,6 +13,7 @@
 #define HAL_IWDG_MODULE_ENABLED
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_RCC_MODULE_ENABLED
+#define HAL_DMA_MODULE_ENABLED
 #define HAL_TIM_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED
 
@@ -31,8 +32,14 @@
 #define PREFETCH_ENABLE      1U
 #define INSTRUCTION_CACHE_ENABLE 1U
 
-/* ---- Assert (disabled in release) ---- */
+/* ---- Assert ---- */
 /* #define USE_FULL_ASSERT 1U */
+#ifdef USE_FULL_ASSERT
+ #define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
+ void assert_failed(uint8_t *file, uint32_t line);
+#else
+ #define assert_param(expr) ((void)0U)
+#endif
 
 /* ---- Include guards for enabled modules ---- */
 #ifdef HAL_RCC_MODULE_ENABLED
@@ -51,6 +58,10 @@
 #ifdef HAL_FLASH_MODULE_ENABLED
  #include "stm32g0xx_hal_flash.h"
  #include "stm32g0xx_hal_flash_ex.h"
+#endif
+#ifdef HAL_DMA_MODULE_ENABLED
+ #include "stm32g0xx_hal_dma.h"
+ #include "stm32g0xx_hal_dma_ex.h"
 #endif
 #ifdef HAL_IWDG_MODULE_ENABLED
  #include "stm32g0xx_hal_iwdg.h"

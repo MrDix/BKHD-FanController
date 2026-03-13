@@ -34,6 +34,8 @@ set(HAL_SOURCES
     ${HAL_DIR}/Src/stm32g0xx_hal_pwr_ex.c
     ${HAL_DIR}/Src/stm32g0xx_hal_flash.c
     ${HAL_DIR}/Src/stm32g0xx_hal_flash_ex.c
+    ${HAL_DIR}/Src/stm32g0xx_hal_dma.c
+    ${HAL_DIR}/Src/stm32g0xx_hal_dma_ex.c
     ${HAL_DIR}/Src/stm32g0xx_hal_tim.c
     ${HAL_DIR}/Src/stm32g0xx_hal_tim_ex.c
     ${HAL_DIR}/Src/stm32g0xx_hal_uart.c

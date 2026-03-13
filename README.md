@@ -114,18 +114,21 @@ Output: `build/fan_controller.bin` and `build/fan_controller.hex`
 
 The [STLINK-V3MINIE](https://www.st.com/en/development-tools/stlink-v3minie.html) connects to the MCU via the SWD header (SWDIO, SWCLK, GND, 3.3V).
 
+> **Important:** The STLINK-V3MINIE does **not** supply power to the target board — it only measures the target voltage. Your board must be powered externally (e.g. via USB or a 5V supply) before flashing.
+
 **Install flash tools:**
 
 <details>
 <summary><strong>Linux</strong></summary>
 
 ```bash
-# stlink open-source tools
+# Option 1: stlink open-source tools (recommended)
 sudo apt install stlink-tools        # Ubuntu/Debian
 sudo pacman -S stlink                # Arch
 
-# Or install STM32CubeProgrammer from:
-# https://www.st.com/en/development-tools/stm32cubeprog.html
+# Option 2: OpenOCD
+sudo apt install openocd             # Ubuntu/Debian
+sudo pacman -S openocd               # Arch
 ```
 
 udev rules (required for non-root access):
@@ -146,11 +149,11 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 <summary><strong>macOS</strong></summary>
 
 ```bash
-# stlink open-source tools
+# Option 1: stlink open-source tools (recommended)
 brew install stlink
 
-# Or install STM32CubeProgrammer from:
-# https://www.st.com/en/development-tools/stm32cubeprog.html
+# Option 2: OpenOCD
+brew install openocd
 ```
 
 </details>
@@ -158,11 +161,19 @@ brew install stlink
 <details>
 <summary><strong>Windows</strong></summary>
 
-Install [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html). It includes `STM32_Programmer_CLI.exe` and the required USB drivers for the STLINK-V3MINIE.
+> **Note:** The open-source stlink-tools (`st-flash`) do **not** support the STLINK-V3 on Windows. Use OpenOCD or STM32CubeProgrammer instead.
+
+**Option 1: OpenOCD (recommended)**
+
+Download from [openocd.org/releases](https://github.com/openocd-org/openocd/releases) and extract the archive. Add the `bin` directory to your PATH (the `scripts` folder must remain in the same relative location).
+
+**Option 2: STM32CubeProgrammer**
+
+Download from [st.com](https://www.st.com/en/development-tools/stm32cubeprog.html). The installer is Java-based — the setup wizard may open behind other windows, check the taskbar if it appears to hang.
 
 Default install path: `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin`
 
-Add this directory to your PATH, or use the full path in the commands below.
+Add this directory to your PATH.
 
 </details>
 
@@ -173,24 +184,27 @@ Using [stlink tools](https://github.com/stlink-org/stlink) (Linux / macOS):
 st-flash write build/fan_controller.bin 0x08000000
 ```
 
-Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) (Linux / macOS / Windows):
-```bash
-STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000 -v --start
-```
-
-Using OpenOCD (Linux / macOS):
+Using [OpenOCD](https://github.com/openocd-org/openocd/releases) (Linux / macOS / Windows):
 ```bash
 openocd -f interface/stlink.cfg -f target/stm32g0x.cfg \
     -c "program build/fan_controller.bin 0x08000000 verify reset exit"
 ```
 
+Using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) (Linux / macOS / Windows):
+```bash
+STM32_Programmer_CLI -c port=SWD -w build/fan_controller.bin 0x08000000 -v --start
+```
+
 **Verify the connection** (optional):
 ```bash
-# stlink (Linux / macOS)
+# stlink (Linux / macOS only)
 st-info --probe
 
+# OpenOCD (Linux / macOS / Windows)
+openocd -f interface/stlink.cfg -f target/stm32g0x.cfg
+
 # STM32CubeProgrammer (Linux / macOS / Windows)
-STM32_Programmer_CLI -c port=SWD --readDeviceId
+STM32_Programmer_CLI -c port=SWD
 ```
 
 ## Host Software Setup
