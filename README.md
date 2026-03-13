@@ -125,7 +125,7 @@ udev rules (required for non-root access):
 
 ```bash
 sudo cp /usr/lib/udev/rules.d/*stlink* /etc/udev/rules.d/ 2>/dev/null || \
-  sudo sh -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"0483\", ATTR{idProduct}==\"3754\", MODE=\"0666\"" > /etc/udev/rules.d/49-stlink.rules'
+  sudo sh -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"0483\", ATTR{idProduct}==\"3754\", GROUP=\"plugdev\", MODE=\"0660\", TAG+=\"uaccess\"" > /etc/udev/rules.d/49-stlink.rules'
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
@@ -173,12 +173,12 @@ openocd -f interface/stlink.cfg -f target/stm32g0x.cfg \
     -c "program build/fan_controller.bin 0x08000000 verify reset exit"
 ```
 
-**Verify the connection** (optional, any platform):
+**Verify the connection** (optional):
 ```bash
-# stlink
+# stlink (Linux / macOS)
 st-info --probe
 
-# STM32CubeProgrammer
+# STM32CubeProgrammer (Linux / macOS / Windows)
 STM32_Programmer_CLI -c port=SWD --readDeviceId
 ```
 
