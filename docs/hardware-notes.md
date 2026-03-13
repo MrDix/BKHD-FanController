@@ -93,3 +93,12 @@ Host TX ──[10k]──┬── STM32 RX (PA3)
 - Input: 5V (with TVS and Polyfuse)
 - 3.3V rail: AMS1117-3.3 LDO
 - Reset: 10k pull-up to 3.3V + 100nF to GND
+
+## Jumper Configuration (Production Mode)
+
+![PCB with jumpers set for production use](20260313_052843.jpg)
+
+Two jumpers must be set when the board is installed in the BKHD-2049NP-6L enclosure:
+
+- **Right jumper (power):** Bridges the GPIO connector power pins so the board is powered from the host mainboard's GPIO header.
+- **Left jumper (SWD protection):** Placed on a single pin of the SWD header to prevent the exposed SWD pins from shorting against the adjacent NVMe heatsink inside the enclosure.
