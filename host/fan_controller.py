@@ -103,18 +103,35 @@ HWMON_BASE = Path("/sys/class/hwmon")
 
 
 def find_hwmon_by_name(name: str) -> Path | None:
-    """Find hwmon directory by sensor name (e.g. 'nvme0', 'coretemp')."""
+    """Find hwmon directory by sensor name.
+    Supports 'name:N' syntax to select the Nth match (0-based index).
+    """
     if not HWMON_BASE.exists():
         return None
-    for hwmon_dir in HWMON_BASE.iterdir():
+
+    # Parse optional index suffix: "nvme:0", "nvme:1", "spd5118:1"
+    index = 0
+    if ":" in name:
+        base, idx_str = name.rsplit(":", 1)
+        try:
+            index = int(idx_str)
+            name = base
+        except ValueError:
+            pass  # treat as literal name with colon (unlikely)
+
+    matches = []
+    for hwmon_dir in sorted(HWMON_BASE.iterdir()):  # sorted for stable order
         name_file = hwmon_dir / "name"
         if name_file.exists():
             try:
                 hw_name = name_file.read_text().strip()
                 if hw_name == name:
-                    return hwmon_dir
+                    matches.append(hwmon_dir)
             except OSError:
                 continue
+
+    if index < len(matches):
+        return matches[index]
     return None
 
 
