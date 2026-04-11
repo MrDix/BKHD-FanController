@@ -1,5 +1,17 @@
 # BKHD Fan Controller
 
+> # ⚠️ WORK IN PROGRESS — DO NOT REPLICATE YET ⚠️
+>
+> **This project is under active development and is NOT ready for replication.**
+>
+> Hardware, firmware, protocol, and host software are all still evolving. Pin
+> assignments, schematics, and APIs may change without notice. Nothing here
+> has been fully validated on the final PCB. Building this now may result in
+> damaged hardware, non-working fans, or worse.
+>
+> **Please wait for a tagged release (`v1.0.0` or later) before attempting to
+> build or flash anything from this repository.**
+
 STM32G031-based 5-channel PWM fan controller with Linux host software for the BKHD-2049NP-6L mini PC.
 
 ## Features
