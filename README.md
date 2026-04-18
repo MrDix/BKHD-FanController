@@ -19,8 +19,12 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 - **5 independent PWM channels** — 25 kHz, 0-100% duty, for 4-pin PC fans
 - **TACH monitoring** — RPM measurement per fan with stall detection
 - **Optional NTC input** — one analog NTC thermistor input (Semitec 104NT)
-  on PB7, opt-in via the `NTC1_ENABLED` build flag. When enabled, surfaced
-  to the host via the STS frame as a virtual `ntc1` sensor.
+  on PB7, gated behind the `NTC1_ENABLED` build flag. Intended as a
+  workaround for OEM 82599ES variants whose on-die thermal sensor is
+  disabled in the vendor NVM image (see
+  [docs/hardware-notes.md](docs/hardware-notes.md) for the full story).
+  When enabled and populated, the value is surfaced to the host via the
+  STS frame as a virtual `ntc1` sensor.
 - **Buzzer alarm** — active buzzer alerts on fan failure or host communication loss
 - **Host watchdog** — all fans ramp to 100% if host goes silent for 60 seconds
 - **UART protocol** — simple ASCII (NMEA-style) for easy debugging with any terminal
@@ -32,11 +36,13 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 - **MCU:** STM32G031K8T6 (Cortex-M0+, 64 MHz, 64 KB Flash, 8 KB RAM)
 - **Fans:** 5x 5V 4-pin PWM via NPN open-collector drivers
 - **TACH:** 5x input with 3.3V pull-up, EXTI-based pulse counting
-- **NTC (optional nachrüstung):** Semitec 104NT-4-R025H42G (100 kΩ, B = 4267 K)
-  in a 100 kΩ divider to +3V3, sampled on ADC1_IN11 (PB7). Mount with thermal
-  adhesive on the component you want to monitor (e.g. the Intel 82599ES
-  heatsink). Not present on the stock PCB revision; enable in firmware by
-  setting `NTC1_ENABLED=1` (see [docs/hardware-notes.md](docs/hardware-notes.md)).
+- **NTC (optional, v1 PCB workaround):** Semitec 104NT-4-R025H42G (100 kΩ,
+  B = 4267 K) in a 100 kΩ divider to +3V3, sampled on ADC1_IN11 (PB7). The
+  v1 PCB does **not** carry this divider — it has to be retrofitted with
+  fine wires soldered from PB7 and from +3V3/GND to a leaded NTC cemented
+  to the 82599ES heatsink. Enable in firmware via `NTC1_ENABLED=1`. See
+  [docs/hardware-notes.md](docs/hardware-notes.md) for why this workaround
+  exists and how to carry it out.
 - **Buzzer:** Active 5V buzzer via NPN
 - **UART:** USART2 @ 115200 8N1 with level shifting
 
@@ -106,20 +112,34 @@ git submodule update --init --recursive
 
 ### Build
 
+Two firmware variants are supported from the same source tree, selected by
+the `NTC1_ENABLED` CMake option:
+
+- **Default (`NTC1_ENABLED=0`) — unmodified v1 PCB.** No NTC soldered on.
+  The firmware leaves PB7 alone, skips ADC init entirely, and reports
+  `t1 = -32768` in every STS frame. Any fan configured against `ntc1`
+  transparently falls back to its `fallback_sensor` on the host.
+- **Opt-in (`NTC1_ENABLED=1`) — v1 PCB with NTC nachrüstung, or a future
+  PCB revision that carries the divider by default.** Enables ADC1
+  sampling and ships real temperature readings in `t1`.
+
 Linux / macOS:
 
 ```bash
 cd firmware
+
+# Default: stock v1 PCB, no NTC
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+cmake --build build
+
+# With NTC nachrüstung present (or on a future PCB that carries the divider):
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake -DNTC1_ENABLED=1
 cmake --build build
 ```
 
-**NTC nachrüstung present?** Pass `-DNTC1_ENABLED=1` to the first cmake
-command (defaults to 0 for the stock board):
-
-```bash
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake -DNTC1_ENABLED=1
-```
+> **Do not pass `-DNTC1_ENABLED=1` for an unmodified v1 PCB.** Without the
+> divider, PB7 is floating and any sampled value is meaningless; a fan
+> configured to follow `ntc1` would be driven by noise.
 
 Windows (a generator must be specified — CMake defaults to NMake which requires Visual Studio):
 
@@ -129,6 +149,7 @@ rem With Ninja (recommended):
 cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
 rem Or with MinGW Make (if installed via MSYS2/chocolatey):
 cmake -B build -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+rem Append -DNTC1_ENABLED=1 to either of the above if the NTC is populated.
 
 cmake --build build
 ```
@@ -281,7 +302,7 @@ Sensor syntax in `config.yaml`:
 |-------|---------|
 | `"acpitz"`, `"coretemp"` | Match an hwmon device by its `name` file |
 | `"nvme:0"`, `"nvme:1"` | Pick the Nth device when multiple share the same name (sorted by hwmon index) |
-| `"ntc1"` | Virtual sensor populated from the MCU STS frame (requires firmware built with `NTC1_ENABLED=1` and the NTC nachrüstung populated). If the MCU reports the sensor as invalid, fans fall back to `fallback_sensor` automatically. |
+| `"ntc1"` | Virtual sensor populated from the MCU STS frame. Requires firmware built with `NTC1_ENABLED=1` **and** the NTC nachrüstung actually soldered on. If either is missing, the value is reported as invalid and affected fans fall back to `fallback_sensor` automatically — so referencing `ntc1` in the config is safe even on unmodified v1 boards. |
 
 DDR5 temperature sensors (`spd5118`) require the kernel module to be loaded
 and the per-DIMM I2C devices to be instantiated. On Proxmox VE / Debian:
@@ -378,15 +399,15 @@ socat -d PTY,raw,echo=0 PTY,raw,echo=0
 5. Stop sending commands for 60s, verify failsafe (all fans 100%)
 6. Run host script, verify temperature-based fan curve operation
 7. Kill host script, verify failsafe kicks in after 60s
-8. With `NTC1_ENABLED=1`: heat the NTC with a finger or hot-air station; verify `ntc1` rises in the host logs
-9. With `NTC1_ENABLED=0` (default / stock PCB): verify every STS frame reports `t1=-32768` and any fan configured against `ntc1` falls back to its `fallback_sensor`
+8. Build with `NTC1_ENABLED=1` on a board with NTC nachrüstung: heat the NTC with a finger or hot-air station; verify `ntc1` rises in the host logs and the configured fan ramps up
+9. Build with `NTC1_ENABLED=0` (default / stock v1 PCB): verify every STS frame reports `t1=-32768` and any fan configured against `ntc1` falls back to its `fallback_sensor`
 
 ## Project Structure
 
 ```
 BKHD-FanController/
 ├── firmware/
-│   ├── CMakeLists.txt          # Build configuration
+│   ├── CMakeLists.txt          # Build configuration (NTC1_ENABLED option)
 │   ├── arm-none-eabi.cmake     # Cross-compilation toolchain
 │   ├── STM32G031K8Tx.ld        # Linker script
 │   ├── Inc/                    # Header files
@@ -405,7 +426,7 @@ BKHD-FanController/
 │   └── requirements.txt        # Python dependencies
 └── docs/
     ├── protocol.md             # UART protocol spec
-    └── hardware-notes.md       # Schematics and pin mapping
+    └── hardware-notes.md       # Schematics, pin mapping, NTC workaround rationale
 ```
 
 ## License
