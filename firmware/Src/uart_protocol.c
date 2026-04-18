@@ -14,10 +14,12 @@
  *   $ACK*XX                   Acknowledge error / silence buzzer
  *
  * MCU -> Host:
- *   $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5*XX
+ *   $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5,t1*XX
+ *   (t1 = NTC1 temperature in tenths of C, or -32768 if unavailable)
  */
 
 #include "uart_protocol.h"
+#include "ntc.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,15 +191,18 @@ bool uart_get_command(uart_parsed_t *out)
 }
 
 void uart_send_status(const uint16_t *rpm_vals, uint8_t err_mask,
-                      uint8_t wdt_active, const uint8_t *duty)
+                      uint8_t wdt_active, const uint8_t *duty,
+                      int16_t ntc1_t10)
 {
-    /* Build payload (without $ and *checksum) */
+    /* Build payload (without $ and *checksum). t1 is printed as signed
+     * decimal so NTC_TEMP_INVALID (INT16_MIN) is parseable on the host. */
     int n = snprintf(tx_buf, sizeof(tx_buf),
-                     "STS,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+                     "STS,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%d",
                      rpm_vals[0], rpm_vals[1], rpm_vals[2],
                      rpm_vals[3], rpm_vals[4],
                      err_mask, wdt_active,
-                     duty[0], duty[1], duty[2], duty[3], duty[4]);
+                     duty[0], duty[1], duty[2], duty[3], duty[4],
+                     (int)ntc1_t10);
 
     if (n <= 0 || n >= (int)sizeof(tx_buf) - 8)
         return;

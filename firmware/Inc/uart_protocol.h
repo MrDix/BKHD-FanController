@@ -32,8 +32,13 @@ typedef struct {
 void         uart_protocol_init(void);
 void         uart_process(void);              /* call from main loop */
 bool         uart_get_command(uart_parsed_t *out);
+
+/* Send a status frame. ntc1_t10 is the NTC1 temperature in tenths of C,
+ * or NTC_TEMP_INVALID (INT16_MIN) if the sensor is unavailable. */
 void         uart_send_status(const uint16_t *rpm, uint8_t err_mask,
-                              uint8_t wdt_active, const uint8_t *duty);
+                              uint8_t wdt_active, const uint8_t *duty,
+                              int16_t ntc1_t10);
+
 void         uart_rx_irq_handler(void);       /* called from USART ISR */
 
 #endif /* UART_PROTOCOL_H */

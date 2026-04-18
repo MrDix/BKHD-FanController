@@ -1,5 +1,13 @@
 # BKHD Fan Controller — Configuration
 # Copy to /etc/fanctrl.yaml and adjust as needed.
+#
+# Sensor naming:
+#   * A bare name (e.g. "acpitz", "coretemp") matches hwmon by its `name` file.
+#   * "name:N" selects the Nth instance (0-based) when multiple devices share
+#     the same hwmon name. Example: two NVMe drives both appear as "nvme",
+#     so use "nvme:0" and "nvme:1".
+#   * "ntc1" is a virtual sensor provided by the MCU via the STS frame
+#     (Semitec 104NT on PB7, typically on the 82599ES heatsink).
 
 serial_port: /dev/ttyS0
 baud_rate: 115200
@@ -9,7 +17,7 @@ keepalive_interval: 10.0  # seconds between keep-alive frames
 fans:
   fan1:
     label: "NVMe1"
-    sensor: "nvme0"           # hwmon name (ls /sys/class/hwmon/*/name)
+    sensor: "nvme:0"          # first NVMe (sorted by hwmon index)
     fallback_sensor: "coretemp"
     temp_min: 35              # below this: pwm_min
     temp_max: 55              # above this: pwm_max (100%)
@@ -19,7 +27,7 @@ fans:
 
   fan2:
     label: "NVMe2"
-    sensor: "nvme1"
+    sensor: "nvme:1"          # second NVMe
     fallback_sensor: "coretemp"
     temp_min: 35
     temp_max: 55
@@ -29,20 +37,20 @@ fans:
 
   fan3:
     label: "82599ES"
-    sensor: "ixgbe"
+    sensor: "ntc1"            # MCU-provided NTC on 82599ES heatsink
     fallback_sensor: "coretemp"
-    temp_min: 40
-    temp_max: 70
+    temp_min: 45
+    temp_max: 75
     pwm_min: 25
     pwm_max: 100
     hysteresis: 3
 
   fan4:
-    label: "RAM"
-    sensor: null              # RAM temp usually not available
+    label: "DDR5"
+    sensor: "spd5118:0"       # first DDR5 DIMM (load spd5118 kernel module)
     fallback_sensor: "coretemp"
-    temp_min: 35
-    temp_max: 60
+    temp_min: 40
+    temp_max: 65
     pwm_min: 25
     pwm_max: 100
     hysteresis: 3
@@ -51,8 +59,8 @@ fans:
     label: "Motherboard"
     sensor: "acpitz"
     fallback_sensor: "coretemp"
-    temp_min: 35
-    temp_max: 60
-    pwm_min: 25
+    temp_min: 30
+    temp_max: 55
+    pwm_min: 20
     pwm_max: 100
     hysteresis: 3

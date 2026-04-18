@@ -8,7 +8,8 @@ over UART. Receives RPM/status telemetry and logs errors.
 
 Protocol: NMEA-style ASCII frames over serial (115200 8N1).
   Host -> MCU:  $SET,d1,d2,d3,d4,d5*XX\\n   $KA*XX\\n   $ACK*XX\\n
-  MCU -> Host:  $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5*XX\\n
+  MCU -> Host:  $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5[,t1]*XX\\n
+                (t1 optional, tenths of C from NTC1; -32768 = unavailable)
 
 Usage:
   python3 fan_controller.py                        # use default config
@@ -37,10 +38,13 @@ DEFAULT_CONFIG = {
     "keepalive_interval": 10.0, # seconds between keep-alive frames
     "status_timeout": 2.0,      # seconds to wait for MCU response
 
+    # NOTE: keep these defaults in sync with host/config.yaml. Users who run
+    # the daemon without a config file (or with only a partial override) should
+    # see the same behavior as users of the packaged YAML.
     "fans": {
         "fan1": {
             "label": "NVMe1",
-            "sensor": "nvme0",
+            "sensor": "nvme:0",
             "fallback_sensor": "coretemp",
             "temp_min": 35,
             "temp_max": 55,
@@ -50,7 +54,7 @@ DEFAULT_CONFIG = {
         },
         "fan2": {
             "label": "NVMe2",
-            "sensor": "nvme1",
+            "sensor": "nvme:1",
             "fallback_sensor": "coretemp",
             "temp_min": 35,
             "temp_max": 55,
@@ -60,20 +64,20 @@ DEFAULT_CONFIG = {
         },
         "fan3": {
             "label": "82599ES",
-            "sensor": "ixgbe",
+            "sensor": "ntc1",
             "fallback_sensor": "coretemp",
-            "temp_min": 40,
-            "temp_max": 70,
+            "temp_min": 45,
+            "temp_max": 75,
             "pwm_min": 25,
             "pwm_max": 100,
             "hysteresis": 3,
         },
         "fan4": {
-            "label": "RAM",
-            "sensor": None,
+            "label": "DDR5",
+            "sensor": "spd5118:0",
             "fallback_sensor": "coretemp",
-            "temp_min": 35,
-            "temp_max": 60,
+            "temp_min": 40,
+            "temp_max": 65,
             "pwm_min": 25,
             "pwm_max": 100,
             "hysteresis": 3,
@@ -82,14 +86,20 @@ DEFAULT_CONFIG = {
             "label": "Motherboard",
             "sensor": "acpitz",
             "fallback_sensor": "coretemp",
-            "temp_min": 35,
-            "temp_max": 60,
-            "pwm_min": 25,
+            "temp_min": 30,
+            "temp_max": 55,
+            "pwm_min": 20,
             "pwm_max": 100,
             "hysteresis": 3,
         },
     },
 }
+
+# Special sensor names provided by the MCU (not hwmon-based).
+MCU_SENSORS = {"ntc1"}
+
+# MCU-side magic value for "no NTC sample". Must match firmware NTC_TEMP_INVALID.
+NTC_TEMP_INVALID = -32768
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -97,9 +107,27 @@ DEFAULT_CONFIG = {
 log = logging.getLogger("fanctrl")
 
 # ---------------------------------------------------------------------------
-# Temperature reading
+# Temperature reading (hwmon-based)
 # ---------------------------------------------------------------------------
 HWMON_BASE = Path("/sys/class/hwmon")
+
+
+def _hwmon_sort_key(path: Path) -> tuple[int, str]:
+    """Numeric sort key for hwmon directories.
+
+    Paths are named hwmon0, hwmon1, ..., hwmon10, hwmon11. Plain
+    lexicographic sorting places hwmon10 before hwmon2, which would make
+    "nvme:1" select the wrong physical device once the kernel hands out
+    indices >= 10. Returning a (number, name) tuple gives a deterministic
+    numeric order with a stable fallback for paths that don't match the
+    expected pattern.
+    """
+    name = path.name
+    if name.startswith("hwmon"):
+        suffix = name[len("hwmon"):]
+        if suffix.isdigit():
+            return (int(suffix), name)
+    return (sys.maxsize, name)
 
 
 def find_hwmon_by_name(name: str) -> Path | None:
@@ -120,7 +148,7 @@ def find_hwmon_by_name(name: str) -> Path | None:
             pass  # treat as literal name with colon (unlikely)
 
     matches = []
-    for hwmon_dir in sorted(HWMON_BASE.iterdir()):  # sorted for stable order
+    for hwmon_dir in sorted(HWMON_BASE.iterdir(), key=_hwmon_sort_key):
         name_file = hwmon_dir / "name"
         if name_file.exists():
             try:
@@ -149,11 +177,21 @@ def read_hwmon_temp(hwmon_dir: Path) -> float | None:
     return None
 
 
-def read_temperature(sensor_name: str | None, fallback: str | None) -> float | None:
-    """Read temperature from named sensor, falling back if needed."""
+def read_temperature(sensor_name: str | None, fallback: str | None,
+                     mcu_sensors: dict) -> float | None:
+    """Read temperature from a sensor. Handles both hwmon and MCU-sourced
+    sensors (e.g. 'ntc1'), falling back if the requested sensor is missing."""
     for name in (sensor_name, fallback):
         if name is None:
             continue
+        # MCU-provided virtual sensor?
+        key = name.split(":", 1)[0]
+        if key in MCU_SENSORS:
+            val = mcu_sensors.get(key)
+            if val is not None:
+                return val
+            continue
+        # Otherwise hwmon
         hwmon = find_hwmon_by_name(name)
         if hwmon is not None:
             temp = read_hwmon_temp(hwmon)
@@ -224,7 +262,11 @@ def build_frame(payload: str) -> bytes:
 
 
 def parse_status(line: str) -> dict | None:
-    """Parse a $STS,...*XX frame. Returns dict or None on error."""
+    """Parse a $STS,...*XX frame. Returns dict or None on error.
+
+    Accepts both legacy (13 fields: STS + 5 RPM + err + wdt + 5 duty) and
+    NTC-extended (14 fields: legacy + t1) frames so host and firmware can
+    be upgraded independently."""
     line = line.strip()
     if not line.startswith("$") or "*" not in line:
         return None
@@ -244,12 +286,18 @@ def parse_status(line: str) -> dict | None:
         return None
 
     try:
-        return {
+        out = {
             "rpm": [int(parts[i]) for i in range(1, 6)],
             "err_mask": int(parts[6]),
             "wdt_active": int(parts[7]),
             "duty": [int(parts[i]) for i in range(8, 13)],
+            "ntc1": None,
         }
+        if len(parts) >= 14:
+            t10 = int(parts[13])
+            if t10 != NTC_TEMP_INVALID:
+                out["ntc1"] = t10 / 10.0
+        return out
     except (ValueError, IndexError):
         return None
 
@@ -268,6 +316,8 @@ class FanController:
         self.running = True
         self.last_duties = [0] * 5
         self.last_status = None
+        # Latest MCU-provided sensor values (e.g. ntc1). Populated from STS frames.
+        self.mcu_sensors = {}  # type: dict[str, float]
 
         # Build fan curves from config
         fans_cfg = config.get("fans", {})
@@ -353,10 +403,12 @@ class FanController:
         """Read all temperatures and compute duty cycles."""
         duties = []
         for i, (fc, curve) in enumerate(zip(self.fan_configs, self.curves)):
-            temp = read_temperature(fc.get("sensor"), fc.get("fallback_sensor"))
+            temp = read_temperature(fc.get("sensor"),
+                                    fc.get("fallback_sensor"),
+                                    self.mcu_sensors)
             duty = curve.compute(temp)
             if temp is not None:
-                log.info("Fan%d (%s): %.1f°C -> %d%%",
+                log.info("Fan%d (%s): %.1f\u00b0C -> %d%%",
                          i + 1, fc.get("label", "?"), temp, duty)
             else:
                 log.warning("Fan%d (%s): sensor unavailable, using %d%%",
@@ -367,9 +419,12 @@ class FanController:
     def log_status(self, status: dict):
         """Log MCU status to syslog-compatible output."""
         rpm_str = " ".join(f"F{i+1}={r}rpm" for i, r in enumerate(status["rpm"]))
-        log.info("MCU Status: %s err=0x%02X wdt=%d duty=%s",
+        ntc_str = ""
+        if status.get("ntc1") is not None:
+            ntc_str = f" ntc1={status['ntc1']:.1f}\u00b0C"
+        log.info("MCU Status: %s err=0x%02X wdt=%d duty=%s%s",
                  rpm_str, status["err_mask"], status["wdt_active"],
-                 status["duty"])
+                 status["duty"], ntc_str)
 
         if status["err_mask"]:
             for i in range(5):
@@ -396,6 +451,11 @@ class FanController:
             status = self.drain_status()
             if status is not None:
                 self.last_status = status
+                if status.get("ntc1") is not None:
+                    self.mcu_sensors["ntc1"] = status["ntc1"]
+                else:
+                    # Explicitly forget stale NTC reading if MCU reports invalid
+                    self.mcu_sensors.pop("ntc1", None)
                 self.log_status(status)
 
             # Temperature poll + PWM update
