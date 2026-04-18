@@ -47,6 +47,19 @@
 #define UART_RX_PIN GPIO_PIN_3
 #define UART_PORT   GPIOA
 
+/* ---------- NTC1 (ADC1_IN11 on PB7) ----------
+ * Voltage divider: +3V3 -- R_PULLUP (100k) -- PB7 -- NTC -- GND
+ * Sensor: Semitec 104NT-4-R025H42G (100k at 25 C, B=4267K)
+ * Mounted with thermal adhesive pad on the Intel 82599ES heatsink.
+ */
+#define NTC1_PIN          GPIO_PIN_7
+#define NTC1_PORT         GPIOB
+#define NTC1_ADC_CHANNEL  ADC_CHANNEL_11
+#define NTC_PULLUP_OHMS   100000.0f
+#define NTC_R25_OHMS      100000.0f
+#define NTC_BETA_K        4267.0f
+#define NTC_T25_KELVIN    298.15f
+
 /* ---------- PWM parameters ---------- */
 #define PWM_FREQ_HZ       25000U
 #define SYSCLK_HZ         64000000UL
@@ -72,6 +85,7 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim14;
 extern UART_HandleTypeDef huart2;
 extern IWDG_HandleTypeDef hiwdg;
+extern ADC_HandleTypeDef  hadc1;
 
 void Error_Handler(void);
 

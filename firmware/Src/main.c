@@ -7,6 +7,7 @@
  * TACH:  EXTI falling edge on PB0..PB4
  * UART:  USART2 @ 115200 8N1 on PA2/PA3
  * Buzzer: GPIO PA1
+ * NTC1:  ADC1_IN11 on PB7 (Semitec 104NT on 82599ES heatsink)
  */
 
 #include "main.h"
@@ -15,6 +16,7 @@
 #include "uart_protocol.h"
 #include "buzzer.h"
 #include "watchdog.h"
+#include "ntc.h"
 
 /* ---------- Global HAL handles ---------- */
 TIM_HandleTypeDef  htim1;
@@ -44,11 +46,14 @@ int main(void)
     buzzer_init();
     uart_protocol_init();
     watchdog_init();
+    ntc_init();
 
     /* Start with all fans at 100 % until host takes over */
     fan_set_all(100);
 
-    uint32_t last_status = 0;
+    uint32_t last_status    = 0;
+    bool     last_alarm_on  = false;  /* tracks buzzer alarm state for edge detect */
+    int16_t  last_ntc_t10   = NTC_TEMP_INVALID;
 
     while (1)
     {
@@ -75,6 +80,7 @@ int main(void)
 
             case CMD_ACK:
                 buzzer_off();
+                last_alarm_on = false;
                 break;
 
             default:
@@ -88,7 +94,7 @@ int main(void)
         /* --- Watchdog / failsafe check --- */
         watchdog_check();
 
-        /* --- Alarm: check for stalled fans --- */
+        /* --- Alarm handling + periodic status --- */
         {
             uint8_t err_mask = 0;
             for (uint8_t i = 0; i < NUM_FANS; i++)
@@ -97,9 +103,20 @@ int main(void)
                     err_mask |= (1U << i);
             }
 
-            if (err_mask || watchdog_is_failsafe())
+            bool alarm_on = (err_mask != 0) || watchdog_is_failsafe();
+
+            if (alarm_on)
+            {
                 buzzer_blink_update();
-            /* Note: buzzer_off() is only called via ACK command */
+            }
+            else if (last_alarm_on)
+            {
+                /* Falling edge: alarm condition cleared — ensure buzzer off.
+                 * Fixes bug where the blink pattern could leave the GPIO
+                 * stuck HIGH after the last alarm cleared. */
+                buzzer_off();
+            }
+            last_alarm_on = alarm_on;
 
             /* --- Send status periodically --- */
             uint32_t now = HAL_GetTick();
@@ -115,9 +132,12 @@ int main(void)
                     duty[i] = fan_get_duty(i);
                 }
 
+                last_ntc_t10 = ntc_read_tenths_celsius();
+
                 uart_send_status(rpm, err_mask,
                                  watchdog_is_failsafe() ? 1 : 0,
-                                 duty);
+                                 duty,
+                                 last_ntc_t10);
             }
         }
 

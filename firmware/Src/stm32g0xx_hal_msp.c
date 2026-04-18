@@ -47,6 +47,26 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
 }
 
 /**
+ * ADC MSP init — enable ADC clock. GPIO is configured in ntc_init().
+ */
+void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        __HAL_RCC_ADC_CLK_ENABLE();
+    }
+}
+
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        __HAL_RCC_ADC_CLK_DISABLE();
+        HAL_GPIO_DeInit(NTC1_PORT, NTC1_PIN);
+    }
+}
+
+/**
  * TIM PWM MSP init — configure GPIO pins as timer AF outputs.
  */
 void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)

@@ -18,6 +18,8 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 
 - **5 independent PWM channels** — 25 kHz, 0-100% duty, for 4-pin PC fans
 - **TACH monitoring** — RPM measurement per fan with stall detection
+- **NTC input** — one analog NTC thermistor input (Semitec 104NT) on PB7,
+  surfaced to the host via the STS frame as a virtual `ntc1` sensor
 - **Buzzer alarm** — active buzzer alerts on fan failure or host communication loss
 - **Host watchdog** — all fans ramp to 100% if host goes silent for 60 seconds
 - **UART protocol** — simple ASCII (NMEA-style) for easy debugging with any terminal
@@ -29,6 +31,9 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 - **MCU:** STM32G031K8T6 (Cortex-M0+, 64 MHz, 64 KB Flash, 8 KB RAM)
 - **Fans:** 5x 5V 4-pin PWM via NPN open-collector drivers
 - **TACH:** 5x input with 3.3V pull-up, EXTI-based pulse counting
+- **NTC:** Semitec 104NT-4-R025H42G (100 kΩ, B = 4267 K) in a 100 kΩ divider
+  to +3V3, sampled on ADC1_IN11 (PB7). Mount with thermal adhesive on the
+  component you want to monitor (e.g. the Intel 82599ES heatsink).
 - **Buzzer:** Active 5V buzzer via NPN
 - **UART:** USART2 @ 115200 8N1 with level shifting
 
@@ -222,28 +227,80 @@ STM32_Programmer_CLI -c port=SWD
 
 ## Host Software Setup
 
+The host daemon is a small Python program (`pyserial` + `pyyaml`) that runs as
+a systemd service. Modern distributions (Debian 12+, Ubuntu 23.10+, Fedora 38+,
+and derivatives such as Proxmox VE 8+) enforce
+[PEP 668](https://peps.python.org/pep-0668/) and will reject a plain
+`pip3 install -r requirements.txt` with `externally-managed-environment`.
+The instructions below use a dedicated virtual environment at
+`/opt/bkhd-fanctrl/venv` so the daemon is fully isolated from the system
+Python and the `fan-controller.service` unit can call the interpreter by
+absolute path without any activation step.
+
 ### Install
 
 ```bash
-cd host
-pip3 install -r requirements.txt
-sudo cp fan_controller.py /opt/bkhd-fanctrl/
-sudo cp config.yaml /etc/fanctrl.yaml
+# 1. Create the installation directory and virtual environment
+sudo mkdir -p /opt/bkhd-fanctrl
+sudo python3 -m venv /opt/bkhd-fanctrl/venv
+
+# 2. Install dependencies inside the venv
+sudo /opt/bkhd-fanctrl/venv/bin/pip install -r host/requirements.txt
+
+# 3. Deploy the daemon and default config
+sudo cp host/fan_controller.py /opt/bkhd-fanctrl/
+sudo cp host/config.yaml /etc/fanctrl.yaml
 ```
+
+> Older distributions without PEP 668 can still use the classic
+> `sudo pip3 install -r host/requirements.txt` path, but the venv approach
+> works everywhere and is strongly recommended.
 
 ### Configure
 
-Edit `/etc/fanctrl.yaml` to match your sensor names:
+Edit `/etc/fanctrl.yaml` to match your sensor layout:
 
 ```bash
 # Find your hwmon sensor names:
 for h in /sys/class/hwmon/hwmon*; do echo "$h: $(cat $h/name)"; done
 ```
 
+Sensor syntax in `config.yaml`:
+
+| Value | Meaning |
+|-------|---------|
+| `"acpitz"`, `"coretemp"` | Match an hwmon device by its `name` file |
+| `"nvme:0"`, `"nvme:1"` | Pick the Nth device when multiple share the same name (sorted by hwmon index) |
+| `"ntc1"` | Virtual sensor populated from the MCU STS frame (Semitec 104NT on PB7) |
+
+DDR5 temperature sensors (`spd5118`) require the kernel module to be loaded
+and the per-DIMM I2C devices to be instantiated. On Proxmox VE / Debian:
+
+```bash
+echo spd5118 | sudo tee /etc/modules-load.d/spd5118.conf
+sudo modprobe spd5118
+# Bind DIMM addresses (SMBus bus number is typically i2c-1 for the I801 SMBus):
+echo "spd5118 0x50" | sudo tee /sys/bus/i2c/devices/i2c-1/new_device
+echo "spd5118 0x52" | sudo tee /sys/bus/i2c/devices/i2c-1/new_device
+```
+
+For persistent binding across reboots, add a udev rule (adjust the adapter
+name match to your hardware):
+
+```bash
+sudo tee /etc/udev/rules.d/99-spd5118.rules <<'EOF'
+ACTION=="add", SUBSYSTEM=="i2c-adapter", ATTR{name}=="SMBus I801 adapter*", \
+  RUN+="/bin/sh -c 'echo spd5118 0x50 > /sys/bus/i2c/devices/%k/new_device; \
+                    echo spd5118 0x52 > /sys/bus/i2c/devices/%k/new_device'"
+EOF
+sudo udevadm control --reload-rules
+```
+
 ### Run manually
 
 ```bash
-sudo python3 /opt/bkhd-fanctrl/fan_controller.py -c /etc/fanctrl.yaml -v
+sudo /opt/bkhd-fanctrl/venv/bin/python /opt/bkhd-fanctrl/fan_controller.py \
+    -c /etc/fanctrl.yaml -v
 ```
 
 ### Install as systemd service
@@ -253,6 +310,18 @@ sudo cp host/fan-controller.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now fan-controller.service
 sudo journalctl -u fan-controller -f  # view logs
+```
+
+### Updating
+
+When the repo changes, redeploy the script and refresh dependencies:
+
+```bash
+git -C /usr/local/src/BKHD-FanController pull
+sudo cp /usr/local/src/BKHD-FanController/host/fan_controller.py /opt/bkhd-fanctrl/
+sudo /opt/bkhd-fanctrl/venv/bin/pip install -U -r \
+    /usr/local/src/BKHD-FanController/host/requirements.txt
+sudo systemctl restart fan-controller.service
 ```
 
 ## Protocol
@@ -266,8 +335,8 @@ Host -> MCU:  $SET,80,60,50,40,30*4A     Set fan duties (%)
               $KA*35                      Keep-alive
               $ACK*24                     Acknowledge error
 
-MCU -> Host:  $STS,1200,980,850,720,600,0,0,80,60,50,40,30*7B
-              RPM x5, error mask, watchdog, duty x5
+MCU -> Host:  $STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*49
+              RPM x5, error mask, watchdog, duty x5, NTC1 (tenths of °C)
 ```
 
 ### Debug with terminal
@@ -292,12 +361,14 @@ socat -d PTY,raw,echo=0 PTY,raw,echo=0
 
 ### Test plan
 
-1. Flash firmware, verify UART output with terminal (STS frames every 500ms)
+1. Flash firmware, verify UART output with terminal (STS frames every 500ms, now with `t1` field)
 2. Send `$SET,50,50,50,50,50*XX\n` manually, verify PWM with oscilloscope
 3. Block a fan, verify buzzer activates and error bit appears in STS
-4. Stop sending commands for 60s, verify failsafe (all fans 100%)
-5. Run host script, verify temperature-based fan curve operation
-6. Kill host script, verify failsafe kicks in after 60s
+4. Release the fan; verify the buzzer stops again (regression test for the stuck-on bug)
+5. Stop sending commands for 60s, verify failsafe (all fans 100%)
+6. Run host script, verify temperature-based fan curve operation
+7. Kill host script, verify failsafe kicks in after 60s
+8. Heat the NTC with a finger or hot-air station; verify `ntc1` rises in the host logs
 
 ## Project Structure
 
@@ -309,17 +380,18 @@ BKHD-FanController/
 │   ├── STM32G031K8Tx.ld        # Linker script
 │   ├── Inc/                    # Header files
 │   └── Src/                    # Source files
-│       ├── main.c              # Clock, GPIO, timer, UART init
+│       ├── main.c              # Clock, GPIO, timer, UART, alarm edge
 │       ├── fan_control.c       # PWM duty control
 │       ├── tach_measure.c      # RPM measurement via EXTI
 │       ├── uart_protocol.c     # NMEA-style protocol parser
 │       ├── buzzer.c            # Buzzer control
-│       └── watchdog.c          # Host timeout + IWDG
+│       ├── watchdog.c          # Host timeout + IWDG
+│       └── ntc.c               # NTC sampling + Beta conversion
 ├── host/
 │   ├── fan_controller.py       # Linux daemon
 │   ├── config.yaml             # Fan curve configuration
 │   ├── fan-controller.service  # systemd unit file
-│   └── requirements.txt       # Python dependencies
+│   └── requirements.txt        # Python dependencies
 └── docs/
     ├── protocol.md             # UART protocol spec
     └── hardware-notes.md       # Schematics and pin mapping

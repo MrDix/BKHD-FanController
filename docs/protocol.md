@@ -77,7 +77,7 @@ Clears error state and silences the buzzer.
 ### STS — Status Report (every 500ms)
 
 ```
-$STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5*XX\n
+$STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5,t1*XX\n
 ```
 
 | Field | Type | Description |
@@ -86,8 +86,13 @@ $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5*XX\n
 | err | uint8 | Error bitmask (bit 0 = fan 1, ..., bit 4 = fan 5) |
 | wdt | uint8 | 0 = normal, 1 = failsafe active (host timeout) |
 | d1-d5 | uint8 | Current PWM duty cycle (0-100) per fan |
+| t1 | int16 | NTC1 temperature in tenths of °C (e.g. 523 = 52.3 °C); -32768 = sensor unavailable |
 
-**Example:** `$STS,1200,980,850,720,600,0,0,80,60,50,40,30*7B\n`
+**Example:** `$STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*49\n`
+
+> **Backward compatibility:** hosts MUST accept both 13-field (pre-NTC) and
+> 14-field (with t1) STS frames. The t1 field is optional so host and firmware
+> can be upgraded independently.
 
 ### Error Bitmask
 
@@ -124,4 +129,14 @@ When a fan has duty > 0 but RPM < 200:
 
 1. Corresponding bit set in `err` field
 2. Buzzer activates
-3. Error cleared via ACK command
+3. Error cleared via ACK command, or automatically when all stall and
+   failsafe conditions clear (the buzzer stops on the falling edge of the
+   combined alarm state).
+
+## NTC1 Sensor
+
+The MCU samples one analog NTC thermistor (ADC1_IN11 / PB7). The reference
+design uses a Semitec 104NT-4-R025H42G (100 kΩ at 25 °C, B = 4267 K) in a
+voltage divider with a 100 kΩ pullup to +3V3. Steinhart / Beta equation
+conversion is performed on the MCU; the t1 field already carries the
+temperature in tenths of °C.

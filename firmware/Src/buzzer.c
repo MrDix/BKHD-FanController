@@ -31,6 +31,7 @@ void buzzer_off(void)
 {
     buzzer_active = false;
     blink_state = false;
+    blink_tick = 0;
     HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
 }
 
