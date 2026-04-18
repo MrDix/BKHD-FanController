@@ -51,9 +51,10 @@ int main(void)
     /* Start with all fans at 100 % until host takes over */
     fan_set_all(100);
 
-    uint32_t last_status    = 0;
-    bool     last_alarm_on  = false;  /* tracks buzzer alarm state for edge detect */
-    int16_t  last_ntc_t10   = NTC_TEMP_INVALID;
+    uint32_t last_status     = 0;
+    bool     last_alarm_on   = false;  /* edge detection for alarm state */
+    bool     alarm_silenced  = false;  /* true = ACK received, stay quiet for current alarm */
+    int16_t  last_ntc_t10    = NTC_TEMP_INVALID;
 
     while (1)
     {
@@ -79,8 +80,12 @@ int main(void)
                 break;
 
             case CMD_ACK:
+                /* Silence buzzer for the current alarm episode. The silencing
+                 * is cleared when (a) all alarm conditions clear, allowing the
+                 * buzzer to sound for the next alarm, or (b) a new alarm
+                 * condition asserts on the rising edge. */
                 buzzer_off();
-                last_alarm_on = false;
+                alarm_silenced = true;
                 break;
 
             default:
@@ -105,16 +110,24 @@ int main(void)
 
             bool alarm_on = (err_mask != 0) || watchdog_is_failsafe();
 
-            if (alarm_on)
+            /* Rising edge (no alarm -> alarm): clear any prior silencing so
+             * a fresh alarm condition is audible even if ACK was sent for a
+             * previous one that never actually cleared. */
+            if (alarm_on && !last_alarm_on)
+                alarm_silenced = false;
+
+            if (alarm_on && !alarm_silenced)
             {
                 buzzer_blink_update();
             }
-            else if (last_alarm_on)
+            else if (!alarm_on && last_alarm_on)
             {
                 /* Falling edge: alarm condition cleared — ensure buzzer off.
                  * Fixes bug where the blink pattern could leave the GPIO
-                 * stuck HIGH after the last alarm cleared. */
+                 * stuck HIGH after the last alarm cleared. Also reset the
+                 * ACK silencing so subsequent alarms can sound again. */
                 buzzer_off();
+                alarm_silenced = false;
             }
             last_alarm_on = alarm_on;
 

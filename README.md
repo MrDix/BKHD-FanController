@@ -335,7 +335,7 @@ Host -> MCU:  $SET,80,60,50,40,30*4A     Set fan duties (%)
               $KA*35                      Keep-alive
               $ACK*24                     Acknowledge error
 
-MCU -> Host:  $STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*49
+MCU -> Host:  $STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*4C
               RPM x5, error mask, watchdog, duty x5, NTC1 (tenths of °C)
 ```
 

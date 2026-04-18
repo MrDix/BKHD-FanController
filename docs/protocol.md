@@ -88,7 +88,7 @@ $STS,r1,r2,r3,r4,r5,err,wdt,d1,d2,d3,d4,d5,t1*XX\n
 | d1-d5 | uint8 | Current PWM duty cycle (0-100) per fan |
 | t1 | int16 | NTC1 temperature in tenths of °C (e.g. 523 = 52.3 °C); -32768 = sensor unavailable |
 
-**Example:** `$STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*49\n`
+**Example:** `$STS,1200,980,850,720,600,0,0,80,60,50,40,30,523*4C\n`
 
 > **Backward compatibility:** hosts MUST accept both 13-field (pre-NTC) and
 > 14-field (with t1) STS frames. The t1 field is optional so host and firmware

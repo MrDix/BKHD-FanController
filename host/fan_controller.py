@@ -38,6 +38,9 @@ DEFAULT_CONFIG = {
     "keepalive_interval": 10.0, # seconds between keep-alive frames
     "status_timeout": 2.0,      # seconds to wait for MCU response
 
+    # NOTE: keep these defaults in sync with host/config.yaml. Users who run
+    # the daemon without a config file (or with only a partial override) should
+    # see the same behavior as users of the packaged YAML.
     "fans": {
         "fan1": {
             "label": "NVMe1",
@@ -63,18 +66,18 @@ DEFAULT_CONFIG = {
             "label": "82599ES",
             "sensor": "ntc1",
             "fallback_sensor": "coretemp",
-            "temp_min": 40,
-            "temp_max": 70,
+            "temp_min": 45,
+            "temp_max": 75,
             "pwm_min": 25,
             "pwm_max": 100,
             "hysteresis": 3,
         },
         "fan4": {
-            "label": "RAM",
+            "label": "DDR5",
             "sensor": "spd5118:0",
             "fallback_sensor": "coretemp",
-            "temp_min": 35,
-            "temp_max": 60,
+            "temp_min": 40,
+            "temp_max": 65,
             "pwm_min": 25,
             "pwm_max": 100,
             "hysteresis": 3,
@@ -83,9 +86,9 @@ DEFAULT_CONFIG = {
             "label": "Motherboard",
             "sensor": "acpitz",
             "fallback_sensor": "coretemp",
-            "temp_min": 35,
-            "temp_max": 60,
-            "pwm_min": 25,
+            "temp_min": 30,
+            "temp_max": 55,
+            "pwm_min": 20,
             "pwm_max": 100,
             "hysteresis": 3,
         },
@@ -109,6 +112,24 @@ log = logging.getLogger("fanctrl")
 HWMON_BASE = Path("/sys/class/hwmon")
 
 
+def _hwmon_sort_key(path: Path) -> tuple[int, str]:
+    """Numeric sort key for hwmon directories.
+
+    Paths are named hwmon0, hwmon1, ..., hwmon10, hwmon11. Plain
+    lexicographic sorting places hwmon10 before hwmon2, which would make
+    "nvme:1" select the wrong physical device once the kernel hands out
+    indices >= 10. Returning a (number, name) tuple gives a deterministic
+    numeric order with a stable fallback for paths that don't match the
+    expected pattern.
+    """
+    name = path.name
+    if name.startswith("hwmon"):
+        suffix = name[len("hwmon"):]
+        if suffix.isdigit():
+            return (int(suffix), name)
+    return (sys.maxsize, name)
+
+
 def find_hwmon_by_name(name: str) -> Path | None:
     """Find hwmon directory by sensor name.
     Supports 'name:N' syntax to select the Nth match (0-based index).
@@ -127,7 +148,7 @@ def find_hwmon_by_name(name: str) -> Path | None:
             pass  # treat as literal name with colon (unlikely)
 
     matches = []
-    for hwmon_dir in sorted(HWMON_BASE.iterdir()):  # sorted for stable order
+    for hwmon_dir in sorted(HWMON_BASE.iterdir(), key=_hwmon_sort_key):
         name_file = hwmon_dir / "name"
         if name_file.exists():
             try:

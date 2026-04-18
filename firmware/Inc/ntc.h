@@ -22,8 +22,10 @@
 void    ntc_init(void);
 
 /* One-shot ADC conversion. Call periodically (e.g. every STATUS_INTERVAL_MS).
- * Non-blocking: returns the last measured value; conversion happens internally
- * with a short polling wait (<1 ms at 12 bit / 160.5 cycles). */
+ * Performs a short blocking poll with a bounded timeout (10 ms). At 12-bit
+ * resolution with 160.5-cycle sampling the conversion finishes in well under
+ * 1 ms, so the call almost always returns immediately and in the worst case
+ * blocks for up to the timeout. */
 int16_t ntc_read_tenths_celsius(void);
 
 #endif /* NTC_H */
