@@ -17,6 +17,16 @@
 #define HAL_TIM_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED
 
+/* ADC is only required when the optional NTC1 input is populated.
+ * NTC1_ENABLED is propagated from CMake (-DNTC1_ENABLED={0,1}); when unset
+ * we default to 0 here to keep this header usable standalone. */
+#ifndef NTC1_ENABLED
+ #define NTC1_ENABLED 0
+#endif
+#if NTC1_ENABLED
+ #define HAL_ADC_MODULE_ENABLED
+#endif
+
 /* ---- Oscillator values ---- */
 #define HSI_VALUE            16000000UL   /* HSI 16 MHz */
 #define LSI_VALUE               32000UL   /* LSI ~32 kHz */
@@ -73,6 +83,10 @@
 #ifdef HAL_UART_MODULE_ENABLED
  #include "stm32g0xx_hal_uart.h"
  #include "stm32g0xx_hal_uart_ex.h"
+#endif
+#ifdef HAL_ADC_MODULE_ENABLED
+ #include "stm32g0xx_hal_adc.h"
+ #include "stm32g0xx_hal_adc_ex.h"
 #endif
 
 #endif /* STM32G0xx_HAL_CONF_H */
