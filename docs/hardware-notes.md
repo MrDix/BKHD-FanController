@@ -25,6 +25,7 @@
 | PB2 | TACH3 | EXTI2 | - | Input |
 | PB3 | TACH4 | EXTI3 | - | Input |
 | PB4 | TACH5 | EXTI4 | - | Input |
+| PB7 | NTC1 | ADC1_IN11 | - | Analog in |
 
 ## PWM Driver Circuit (per channel)
 
@@ -72,6 +73,58 @@ MCU PA1 ──[1k]──┬── NPN Base
 ```
 
 - Active buzzer: MCU HIGH = buzzer sounds
+
+## NTC1 Input Circuit
+
+```
++3V3 ──[100k]──┬── PB7 (ADC1_IN11)
+               │
+             [NTC]  Semitec 104NT-4-R025H42G (100 kΩ @ 25 °C, B = 4267 K)
+               │
+              GND
+```
+
+- Voltage divider with 100 kΩ pullup. R_ntc falls with rising temperature,
+  so the ADC voltage drops as the sensor heats up.
+- ADC reading converted on the MCU via the Beta equation
+  (1/T = 1/T25 + ln(R_ntc/R25) / B); result is transmitted in tenths of °C
+  as the trailing `t1` field of every STS frame.
+- Reference placement: thermal-adhesive pad on the Intel 82599ES heatsink.
+  Any sensor of the same family can be substituted as long as the firmware
+  constants `NTC_R25_OHMS`, `NTC_BETA_K`, and `NTC_PULLUP_OHMS` in
+  `firmware/Inc/main.h` are updated to match.
+
+### NTC1 Control Loop
+
+The MCU does **not** implement fan curves locally. The NTC sample is just
+another status field; all regulation happens on the host:
+
+```
+NTC (PB7)
+   │ ADC1 sample every ~500 ms
+   ▼
+STM32 firmware ──── $STS,...,t1*XX ────► Host UART
+                                            │
+                                            ▼
+                                   fan_controller.py
+                                   cache mcu_sensors["ntc1"]
+                                            │
+                                            │ every poll_interval (5 s):
+                                            │ FanCurve.compute(ntc1) -> duty
+                                            ▼
+Host UART ◄──── $SET,d1,d2,d3,d4,d5*XX ────
+   │
+   ▼
+STM32 firmware
+   │ TIM compare register update
+   ▼
+PWM on PAx (fan)
+```
+
+Any fan can be driven from the NTC simply by setting `sensor: "ntc1"` in
+`host/config.yaml`. Hysteresis, temp-to-duty mapping, and fallback behaviour
+are host-side configuration; the firmware only enforces the 60-second host
+watchdog that ramps all fans to 100 % if the daemon goes silent.
 
 ## UART Level Shifting
 
