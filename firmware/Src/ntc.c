@@ -2,16 +2,22 @@
  * @file ntc.c
  * @brief NTC thermistor temperature measurement via ADC1 on PB7.
  *
- * Circuit:
+ * Circuit (only populated when NTC1_ENABLED != 0):
  *   +3V3 --- R_PULLUP (100k) --- PB7 --- NTC (Semitec 104NT, 100k @ 25 C) --- GND
  *
  * ADC reads the midpoint voltage. With V_adc in [0, V_ref]:
  *   R_ntc = R_PULLUP * V_adc / (V_ref - V_adc)
  * Temperature via Beta equation:
  *   1/T = 1/T25 + (1/B) * ln(R_ntc / R25)
+ *
+ * When NTC1_ENABLED is 0 (stock PCB without the nachrüstung), this module
+ * compiles down to trivial stubs so PB7 and ADC1 are never touched.
  */
 
 #include "ntc.h"
+
+#if NTC1_ENABLED
+
 #include <math.h>
 
 ADC_HandleTypeDef hadc1;
@@ -95,3 +101,17 @@ int16_t ntc_read_tenths_celsius(void)
 
     return (int16_t)lroundf(t_c * 10.0f);
 }
+
+#else  /* NTC1_ENABLED == 0 */
+
+void ntc_init(void)
+{
+    /* NTC nachrüstung not present: leave PB7 and ADC1 untouched. */
+}
+
+int16_t ntc_read_tenths_celsius(void)
+{
+    return NTC_TEMP_INVALID;
+}
+
+#endif /* NTC1_ENABLED */

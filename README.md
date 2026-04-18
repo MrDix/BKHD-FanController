@@ -18,8 +18,9 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 
 - **5 independent PWM channels** — 25 kHz, 0-100% duty, for 4-pin PC fans
 - **TACH monitoring** — RPM measurement per fan with stall detection
-- **NTC input** — one analog NTC thermistor input (Semitec 104NT) on PB7,
-  surfaced to the host via the STS frame as a virtual `ntc1` sensor
+- **Optional NTC input** — one analog NTC thermistor input (Semitec 104NT)
+  on PB7, opt-in via the `NTC1_ENABLED` build flag. When enabled, surfaced
+  to the host via the STS frame as a virtual `ntc1` sensor.
 - **Buzzer alarm** — active buzzer alerts on fan failure or host communication loss
 - **Host watchdog** — all fans ramp to 100% if host goes silent for 60 seconds
 - **UART protocol** — simple ASCII (NMEA-style) for easy debugging with any terminal
@@ -31,9 +32,11 @@ STM32G031-based 5-channel PWM fan controller with Linux host software for the BK
 - **MCU:** STM32G031K8T6 (Cortex-M0+, 64 MHz, 64 KB Flash, 8 KB RAM)
 - **Fans:** 5x 5V 4-pin PWM via NPN open-collector drivers
 - **TACH:** 5x input with 3.3V pull-up, EXTI-based pulse counting
-- **NTC:** Semitec 104NT-4-R025H42G (100 kΩ, B = 4267 K) in a 100 kΩ divider
-  to +3V3, sampled on ADC1_IN11 (PB7). Mount with thermal adhesive on the
-  component you want to monitor (e.g. the Intel 82599ES heatsink).
+- **NTC (optional nachrüstung):** Semitec 104NT-4-R025H42G (100 kΩ, B = 4267 K)
+  in a 100 kΩ divider to +3V3, sampled on ADC1_IN11 (PB7). Mount with thermal
+  adhesive on the component you want to monitor (e.g. the Intel 82599ES
+  heatsink). Not present on the stock PCB revision; enable in firmware by
+  setting `NTC1_ENABLED=1` (see [docs/hardware-notes.md](docs/hardware-notes.md)).
 - **Buzzer:** Active 5V buzzer via NPN
 - **UART:** USART2 @ 115200 8N1 with level shifting
 
@@ -109,6 +112,13 @@ Linux / macOS:
 cd firmware
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
 cmake --build build
+```
+
+**NTC nachrüstung present?** Pass `-DNTC1_ENABLED=1` to the first cmake
+command (defaults to 0 for the stock board):
+
+```bash
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake -DNTC1_ENABLED=1
 ```
 
 Windows (a generator must be specified — CMake defaults to NMake which requires Visual Studio):
@@ -271,7 +281,7 @@ Sensor syntax in `config.yaml`:
 |-------|---------|
 | `"acpitz"`, `"coretemp"` | Match an hwmon device by its `name` file |
 | `"nvme:0"`, `"nvme:1"` | Pick the Nth device when multiple share the same name (sorted by hwmon index) |
-| `"ntc1"` | Virtual sensor populated from the MCU STS frame (Semitec 104NT on PB7) |
+| `"ntc1"` | Virtual sensor populated from the MCU STS frame (requires firmware built with `NTC1_ENABLED=1` and the NTC nachrüstung populated). If the MCU reports the sensor as invalid, fans fall back to `fallback_sensor` automatically. |
 
 DDR5 temperature sensors (`spd5118`) require the kernel module to be loaded
 and the per-DIMM I2C devices to be instantiated. On Proxmox VE / Debian:
@@ -368,7 +378,8 @@ socat -d PTY,raw,echo=0 PTY,raw,echo=0
 5. Stop sending commands for 60s, verify failsafe (all fans 100%)
 6. Run host script, verify temperature-based fan curve operation
 7. Kill host script, verify failsafe kicks in after 60s
-8. Heat the NTC with a finger or hot-air station; verify `ntc1` rises in the host logs
+8. With `NTC1_ENABLED=1`: heat the NTC with a finger or hot-air station; verify `ntc1` rises in the host logs
+9. With `NTC1_ENABLED=0` (default / stock PCB): verify every STS frame reports `t1=-32768` and any fan configured against `ntc1` falls back to its `fallback_sensor`
 
 ## Project Structure
 
@@ -386,7 +397,7 @@ BKHD-FanController/
 │       ├── uart_protocol.c     # NMEA-style protocol parser
 │       ├── buzzer.c            # Buzzer control
 │       ├── watchdog.c          # Host timeout + IWDG
-│       └── ntc.c               # NTC sampling + Beta conversion
+│       └── ntc.c               # NTC sampling + Beta conversion (opt-in via NTC1_ENABLED)
 ├── host/
 │   ├── fan_controller.py       # Linux daemon
 │   ├── config.yaml             # Fan curve configuration

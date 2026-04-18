@@ -7,6 +7,28 @@
 
 #include "stm32g0xx_hal.h"
 
+/* ---------- Build-time options ----------
+ *
+ * NTC1_ENABLED
+ *   0 (default) -- stock board without NTC nachrüstung. PB7 is left as the
+ *                  default post-reset state (analog input, no pullup/pulldown)
+ *                  and neither the ADC peripheral nor the sampling code are
+ *                  initialised. Every STS frame reports t1 = NTC_TEMP_INVALID
+ *                  (INT16_MIN), so the host daemon's "ntc1" virtual sensor
+ *                  stays absent and any fan configured against it falls back
+ *                  to its fallback_sensor.
+ *   1            -- NTC nachrüstung present: 100k pullup from +3V3 to PB7,
+ *                  NTC from PB7 to GND. Enables ADC init + Beta-equation
+ *                  conversion. Real temperature readings appear in t1.
+ *
+ * The option can be overridden on the CMake command line:
+ *   cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake -DNTC1_ENABLED=1
+ * or directly by editing this file.
+ */
+#ifndef NTC1_ENABLED
+#define NTC1_ENABLED 0
+#endif
+
 /* ---------- Number of fan channels ---------- */
 #define NUM_FANS  5
 
@@ -51,6 +73,8 @@
  * Voltage divider: +3V3 -- R_PULLUP (100k) -- PB7 -- NTC -- GND
  * Sensor: Semitec 104NT-4-R025H42G (100k at 25 C, B=4267K)
  * Mounted with thermal adhesive pad on the Intel 82599ES heatsink.
+ *
+ * Only wired up when NTC1_ENABLED != 0. See build-time options above.
  */
 #define NTC1_PIN          GPIO_PIN_7
 #define NTC1_PORT         GPIOB
@@ -85,7 +109,9 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim14;
 extern UART_HandleTypeDef huart2;
 extern IWDG_HandleTypeDef hiwdg;
+#if NTC1_ENABLED
 extern ADC_HandleTypeDef  hadc1;
+#endif
 
 void Error_Handler(void);
 

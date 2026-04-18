@@ -25,7 +25,7 @@
 | PB2 | TACH3 | EXTI2 | - | Input |
 | PB3 | TACH4 | EXTI3 | - | Input |
 | PB4 | TACH5 | EXTI4 | - | Input |
-| PB7 | NTC1 | ADC1_IN11 | - | Analog in |
+| PB7 | NTC1 *(optional)* | ADC1_IN11 | - | Analog in |
 
 ## PWM Driver Circuit (per channel)
 
@@ -74,7 +74,12 @@ MCU PA1 ──[1k]──┬── NPN Base
 
 - Active buzzer: MCU HIGH = buzzer sounds
 
-## NTC1 Input Circuit
+## NTC1 Input Circuit (optional nachrüstung)
+
+> **Not populated on the current PCB revision.** The board is shipped with
+> PB7 unconnected; firmware support is opt-in via the `NTC1_ENABLED` build
+> flag described below. A future PCB revision is expected to carry the
+> divider by default.
 
 ```
 +3V3 ──[100k]──┬── PB7 (ADC1_IN11)
@@ -93,6 +98,28 @@ MCU PA1 ──[1k]──┬── NPN Base
   Any sensor of the same family can be substituted as long as the firmware
   constants `NTC_R25_OHMS`, `NTC_BETA_K`, and `NTC_PULLUP_OHMS` in
   `firmware/Inc/main.h` are updated to match.
+
+### Build-time flag `NTC1_ENABLED`
+
+Firmware behaviour for PB7 is selected at compile time in
+`firmware/Inc/main.h`:
+
+| Value | Behaviour |
+|-------|-----------|
+| `0` (default) | Stock PCB. PB7 is not reconfigured, ADC1 is never initialised, every STS frame reports `t1 = -32768` (NTC_TEMP_INVALID). Safe for unpopulated boards: a floating PB7 can never produce a misleading temperature reading because the sampling code is compiled out entirely. |
+| `1` | NTC populated. ADC is initialised, self-calibrated, and sampled once per status interval; real tenths-of-°C values appear in `t1`. |
+
+Override on the CMake command line without editing the header:
+
+```bash
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake -DNTC1_ENABLED=1
+cmake --build build
+```
+
+> Do **not** enable `NTC1_ENABLED` on a board that does not carry the
+> divider. PB7 would be sampled as a floating analog input and the host
+> would see fluctuating temperature values that could drive whichever fan
+> is configured against `ntc1` erratically.
 
 ### NTC1 Control Loop
 
@@ -125,6 +152,11 @@ Any fan can be driven from the NTC simply by setting `sensor: "ntc1"` in
 `host/config.yaml`. Hysteresis, temp-to-duty mapping, and fallback behaviour
 are host-side configuration; the firmware only enforces the 60-second host
 watchdog that ramps all fans to 100 % if the daemon goes silent.
+
+When the firmware is built with `NTC1_ENABLED=0` (or the sensor is simply
+unpopulated and firmware correctly reports invalid), `mcu_sensors["ntc1"]`
+stays absent on the host side and any fan configured with `sensor: "ntc1"`
+transparently falls back to its `fallback_sensor` (typically `coretemp`).
 
 ## UART Level Shifting
 

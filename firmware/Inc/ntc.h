@@ -10,6 +10,11 @@
  * under-temperature sensor failures with negative numbers.
  *
  * An invalid/absent sensor returns NTC_TEMP_INVALID.
+ *
+ * When the build-time option NTC1_ENABLED is 0, ntc_init() is a no-op and
+ * ntc_read_tenths_celsius() always returns NTC_TEMP_INVALID. The ADC
+ * peripheral and GPIO are left untouched so PB7 behaves exactly like on
+ * a stock PCB without the NTC nachrüstung.
  */
 #ifndef NTC_H
 #define NTC_H
