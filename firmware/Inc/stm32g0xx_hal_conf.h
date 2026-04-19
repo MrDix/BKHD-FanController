@@ -1,6 +1,13 @@
 /**
  * @file stm32g0xx_hal_conf.h
  * @brief HAL configuration — enable only the modules we need.
+ *
+ * History:
+ *  - PR #2 introduced NTC1 support but omitted HAL_ADC_MODULE_ENABLED,
+ *    causing an unbuildable firmware when NTC1_ENABLED=1.
+ *  - PR #3 fixed the build by gating HAL_ADC_MODULE_ENABLED on NTC1_ENABLED.
+ * Both PRs were merged without a completed CodeRabbit review and are being
+ * reviewed retrospectively via the PR that contains this comment.
  */
 #ifndef STM32G0xx_HAL_CONF_H
 #define STM32G0xx_HAL_CONF_H
