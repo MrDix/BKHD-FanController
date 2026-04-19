@@ -164,6 +164,28 @@ The [STLINK-V3MINIE](https://www.st.com/en/development-tools/stlink-v3minie.html
 
 > **Important:** The STLINK-V3MINIE does **not** supply power to the target board — it only measures the target voltage. Your board must be powered externally (e.g. via USB or a 5V supply) before flashing.
 
+> **USB 3.x ports can prevent the programmer from opening.** The STLINK-V3 is
+> a USB 2.0 High-Speed device, and certain combinations of USB 3.x host
+> controllers (especially Intel and ASMedia on Windows) and the WinUSB driver
+> stack fail to enumerate it cleanly. The symptom is a generic open error
+> with no VID/PID information, for example:
+>
+> ```
+> openocd -f interface/stlink.cfg -f target/stm32g0x.cfg -c "..."
+> Info : auto-selecting first available session transport "hla_swd".
+> Info : clock speed 2000 kHz
+> Error: open failed
+> in procedure 'program'
+> ** OpenOCD init failed **
+> ```
+>
+> `st-info --probe` may report "no device found" and STM32CubeProgrammer may
+> report "STLINK USB communication error" on the same port. If that happens,
+> move the programmer to a **USB 2.0 port** (or insert a USB 2.0 hub between
+> the programmer and the PC). Reproducible on Windows 10/11 with the factory
+> STLINK firmware, and unrelated to the target board or its power supply —
+> once on a 2.0 port the same command succeeds with no other changes.
+
 ![Flashing setup: Lab power supply (5V) connected to the PCB (right), STLINK-V3MINIE programmer connected via SWD header (left)](docs/20260313_052842.jpg)
 
 **Install flash tools:**
